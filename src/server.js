@@ -138,10 +138,16 @@ app.get("/t/e/:token", async (req, res) => {
         console.error("Explore click tracking failed", error.message);
       }
     }
-    res.redirect(302, "https://bestinfra.org/");
+    const dest = String(
+      process.env.BOOKING_URL || process.env.COMPANY_WEBSITE || "https://bestinfra.org/"
+    ).trim() || "https://bestinfra.org/";
+    res.redirect(302, dest);
   } catch (error) {
     console.error("Explore redirect failed", error.message);
-    res.redirect(302, "https://bestinfra.org/");
+    const dest = String(
+      process.env.BOOKING_URL || process.env.COMPANY_WEBSITE || "https://bestinfra.org/"
+    ).trim() || "https://bestinfra.org/";
+    res.redirect(302, dest);
   }
 });
 

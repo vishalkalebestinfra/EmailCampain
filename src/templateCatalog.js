@@ -59,7 +59,7 @@ export const TEMPLATES = [
     name: "General summit thank-you",
     htmlPath: "Template/ThankyouEmail.html",
     mode: "fixed-brochures",
-    subject: "Thank You for Visiting Us | Best Infra",
+    subject: "Great meeting you at Energy Efficiency Summit 2026",
     attachments: ALL_BROCHURE_ATTACHMENTS,
     columns: [
       EMAIL_COLUMN,

@@ -86,8 +86,7 @@ function summitContent(lead) {
 
 function generalThankYouContent(template, lead) {
   const name = lead.name || "there";
-  const bookUrl = bookingUrl();
-  const subject = template.subject || "Thank You for Visiting Us | Best Infra";
+  const subject = template.subject || "Great meeting you at Energy Efficiency Summit 2026";
   const text = [
     `Hi ${name},`,
     "",
@@ -96,8 +95,6 @@ function generalThankYouContent(template, lead) {
     "It was a pleasure connecting with you and learning about your priorities around energy efficiency and sustainability. We would be glad to continue the conversation and explore how our solutions can help improve energy performance, operational efficiency, and sustainability.",
     "",
     "We have attached our brochures with this email.",
-    "",
-    `Book a 15-minute call: ${bookUrl}`,
     "",
     "If you have any specific requirements, contact marketrelations@bestinfra.tech.",
     "",
@@ -110,7 +107,6 @@ function generalThankYouContent(template, lead) {
     text,
     vars: {
       LEAD_NAME: escapeHtml(name),
-      BookingURL: escapeHtml(bookUrl),
     },
   };
 }
@@ -151,10 +147,11 @@ export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl,
     BookingURL: built.vars.BookingURL || escapeHtml(bookingUrl()),
   }), openPixelUrl, unsubscribeUrl);
 
+  const ctaLabel = template.mode === "fixed-brochures" ? "Explore More" : "Explore";
   const text = [
     ...built.text,
     "",
-    exploreUrl ? `Explore: ${exploreUrl}` : "",
+    exploreUrl ? `${ctaLabel}: ${exploreUrl}` : "",
     unsubscribeUrl ? `Unsubscribe: ${unsubscribeUrl}` : "",
   ].filter((line, index, all) => line !== "" || all[index - 1] !== "").join("\n");
 
