@@ -1,0 +1,13 @@
+Duplicate emails in attachments/Final.xlsx
+Total data rows: 90
+Duplicate email addresses: 2
+
+megrajblchip@gmail.com
+  Occurrences: 2
+  - Row 62 | Chandrashekar
+  - Row 84 | C.Chandrashekar
+
+ng.desai@adventz.com
+  Occurrences: 2
+  - Row 63 | Nilesh Dessai
+  - Row 75 | Nilesh Dessai

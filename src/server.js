@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import express from "express";
@@ -24,8 +25,66 @@ import { getTemplate, listTemplates } from "./templateCatalog.js";
 
 const PIXEL = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;
+const sendJobs = new Map();
 
 const app = express();
+
+function publicSendJob(job) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    filename: job.filename,
+    templateName: job.templateName,
+    total: job.total,
+    readyCount: job.readyCount,
+    processed: job.processed,
+    sent: job.sent,
+    failed: job.failed,
+    skipped: job.skipped,
+    rows: [...job.sent, ...job.failed, ...job.skipped],
+    error: job.error || "",
+  };
+}
+
+function hasActiveSendJob() {
+  for (const job of sendJobs.values()) {
+    if (job.status === "queued" || job.status === "running") return true;
+  }
+  return false;
+}
+
+async function runSendJob(jobId, leads, template) {
+  const job = sendJobs.get(jobId);
+  if (!job) return;
+  job.status = "running";
+  console.log(`Send job ${jobId.slice(0, 8)} started (${leads.length} ready)`);
+  try {
+    await sendReadyLeads(leads, template, async ({ index, total, result }) => {
+      job.processed = index + 1;
+      if (result.status === "sent") {
+        job.sent.push(result);
+        try {
+          await rememberSent([result]);
+        } catch (error) {
+          console.error("Failed to remember sent email", error.message);
+        }
+      } else {
+        job.failed.push(result);
+      }
+      if ((index + 1) % 5 === 0 || index + 1 === total) {
+        console.log(`Send job ${jobId.slice(0, 8)} progress ${index + 1}/${total}`);
+      }
+    });
+    job.status = "completed";
+    console.log(
+      `Send job ${jobId.slice(0, 8)} completed: ${job.sent.length} sent, ${job.failed.length} failed`
+    );
+  } catch (error) {
+    job.status = "failed";
+    job.error = error.message || "Send job failed";
+    console.error(`Send job ${jobId.slice(0, 8)} failed`, job.error);
+  }
+}
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
@@ -270,6 +329,11 @@ app.post("/api/send", requireDatabase, receiveWorkbook, async (req, res) => {
     if (!template) {
       return res.status(400).json({ error: "Choose an email template." });
     }
+    if (hasActiveSendJob()) {
+      return res.status(409).json({
+        error: "A send job is already running. Wait for it to finish, then try again.",
+      });
+    }
 
     const smtp = await verifySmtp();
     if (!smtp.ok) {
@@ -278,21 +342,48 @@ app.post("/api/send", requireDatabase, receiveWorkbook, async (req, res) => {
 
     const suppression = await loadSuppression(template.id);
     const parsed = parseWorkbook(req.file.buffer, template, suppression);
-    const sendResults = await sendReadyLeads(parsed.ready, template);
-    const sent = sendResults.filter((row) => row.status === "sent");
-    await rememberSent(sent);
-
-    res.json({
+    const jobId = crypto.randomUUID();
+    const job = {
+      id: jobId,
+      status: "queued",
       filename: req.file.originalname,
       templateName: template.name,
       total: parsed.total,
-      sent,
-      failed: sendResults.filter((row) => row.status === "failed"),
+      readyCount: parsed.ready.length,
+      processed: 0,
+      sent: [],
+      failed: [],
       skipped: parsed.skipped,
+      error: "",
+      createdAt: Date.now(),
+    };
+    sendJobs.set(jobId, job);
+
+    // Return immediately so nginx never waits on the full SMTP batch.
+    res.status(202).json(publicSendJob(job));
+
+    setImmediate(() => {
+      runSendJob(jobId, parsed.ready, template).catch((error) => {
+        const active = sendJobs.get(jobId);
+        if (!active) return;
+        active.status = "failed";
+        active.error = error.message || "Send job failed";
+      });
     });
+
+    // Drop finished jobs after 2 hours to limit memory use.
+    setTimeout(() => sendJobs.delete(jobId), 2 * 60 * 60 * 1000).unref?.();
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+});
+
+app.get("/api/send/:jobId", requireDatabase, (req, res) => {
+  const job = sendJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: "Send job not found (it may have expired after a restart)." });
+  }
+  res.json(publicSendJob(job));
 });
 
 const port = Number(process.env.PORT || 3000);

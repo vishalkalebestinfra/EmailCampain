@@ -181,7 +181,7 @@ export async function sendReadyLeads(leads, template, onProgress) {
         sentAt: new Date().toISOString(),
       };
       results.push(result);
-      onProgress?.({ index, total: leads.length, result });
+      await onProgress?.({ index, total: leads.length, result });
     } catch (error) {
       const details = serializeMailError(error);
       const result = {
@@ -190,7 +190,7 @@ export async function sendReadyLeads(leads, template, onProgress) {
         reason: details.message,
       };
       results.push(result);
-      onProgress?.({ index, total: leads.length, result });
+      await onProgress?.({ index, total: leads.length, result });
     }
 
     if (index < leads.length - 1 && delay > 0) {

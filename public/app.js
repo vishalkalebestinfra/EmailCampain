@@ -213,15 +213,56 @@ function setFile(file) {
   sendBtn.disabled = !ready;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function postFile(url) {
   if (!selectedFile) return null;
   const data = new FormData();
   data.append("templateId", templateSelect.value);
   data.append("file", selectedFile);
   const response = await fetch(url, { method: "POST", body: data });
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    if (/504|gateway time-out/i.test(text)) {
+      throw new Error("Nginx timed out. Deploy the latest app build that sends in the background, then try again.");
+    }
+    throw new Error(response.ok ? "Unexpected non-JSON response" : `Request failed (${response.status})`);
+  }
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error || "Request failed");
   return payload;
+}
+
+function renderSendProgress(job) {
+  tablePanel.hidden = false;
+  document.querySelector("#tableTitle").textContent =
+    job.status === "completed" ? "Send result" : "Sending…";
+  document.querySelector("#tableCaption").textContent =
+    job.status === "queued" || job.status === "running"
+      ? `${job.templateName} · ${job.processed}/${job.readyCount} processed · ${job.sent.length} sent · ${job.failed.length} failed`
+      : `${job.sent.length} sent · ${job.failed.length} failed · ${job.skipped.length} skipped`;
+  setStats({
+    total: job.total,
+    ready: job.readyCount,
+    skipped: job.skipped.length,
+    sent: job.sent.length,
+    failed: job.failed.length,
+  });
+  renderRows(job.rows || [...job.sent, ...job.failed, ...job.skipped]);
+}
+
+async function waitForSendJob(jobId) {
+  while (true) {
+    const response = await fetch(`/api/send/${jobId}`);
+    const job = await response.json();
+    if (!response.ok) throw new Error(job.error || "Could not load send progress");
+    renderSendProgress(job);
+    if (job.status === "completed" || job.status === "failed") return job;
+    await sleep(1500);
+  }
 }
 
 previewBtn.addEventListener("click", async () => {
@@ -252,25 +293,26 @@ sendBtn.addEventListener("click", async () => {
   if (!window.confirm(`Send ${label} emails only for new recipients?`)) return;
   try {
     sendBtn.disabled = true;
-    const result = await postFile("/api/send");
-    tablePanel.hidden = false;
-    document.querySelector("#tableTitle").textContent = "Send result";
-    document.querySelector("#tableCaption").textContent =
-      `${result.sent.length} sent · ${result.failed.length} failed · ${result.skipped.length} skipped`;
-    setStats({
-      total: result.total,
-      ready: result.sent.length,
-      skipped: result.skipped.length,
-      sent: result.sent.length,
-      failed: result.failed.length,
-    });
-    renderRows([...result.sent, ...result.failed, ...result.skipped]);
+    previewBtn.disabled = true;
+    const started = await postFile("/api/send");
+    renderSendProgress(started);
+    showToast(
+      started.readyCount
+        ? `Sending ${started.readyCount} emails in the background…`
+        : "No unique emails to send."
+    );
+    const result = started.jobId ? await waitForSendJob(started.jobId) : started;
+    if (result.status === "failed") {
+      throw new Error(result.error || "Send job failed");
+    }
+    renderSendProgress(result);
     await refreshMeta();
     showToast(result.sent.length ? "Emails sent and remembered." : "No unique emails to send.");
   } catch (error) {
     showToast(error.message);
   } finally {
     sendBtn.disabled = !selectedFile;
+    previewBtn.disabled = !selectedFile;
   }
 });
 
