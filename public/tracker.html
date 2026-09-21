@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Best Infra · Open tracker</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <div class="utility-bar">
+      <nav class="utility-inner" aria-label="App">
+        <a href="/">Send</a>
+        <a href="/tracker" class="active">Tracker</a>
+      </nav>
+    </div>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <img src="/logo.svg" alt="Best Infra logo" width="50" height="47" />
+        <div>
+          <span class="wordmark"><span class="best">Best</span><span class="infra"> Infra</span></span>
+          <p>See whether each email was opened</p>
+        </div>
+      </a>
+    </header>
+
+    <main>
+      <section class="stats three">
+        <article><span>Sent</span><strong id="statSent">0</strong></article>
+        <article class="opened"><span>Opened</span><strong id="statOpened">0</strong></article>
+        <article class="closed"><span>Not opened</span><strong id="statClosed">0</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h3>Email opens</h3>
+            <p id="trackerCaption">Every remembered send, and whether the tracking pixel was loaded.</p>
+          </div>
+          <label class="field filter-field" for="templateFilter">
+            <span>Template name</span>
+            <select id="templateFilter">
+              <option value="">All templates</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Template</th>
+                <th>Name</th>
+                <th>Sent at</th>
+                <th>Status</th>
+                <th>Opened at</th>
+                <th>Opens</th>
+              </tr>
+            </thead>
+            <tbody id="trackerBody">
+              <tr><td colspan="7" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/tracker.js"></script>
+  </body>
+</html>

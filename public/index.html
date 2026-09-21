@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Best Infra · Lead Emailer</title>
+    <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <div class="utility-bar">
+      <nav class="utility-inner" aria-label="App">
+        <a href="/" class="active">Send</a>
+        <a href="/tracker">Tracker</a>
+      </nav>
+    </div>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <img src="/logo.svg" alt="Best Infra logo" width="50" height="47" />
+        <div>
+          <span class="wordmark"><span class="best">Best</span><span class="infra"> Infra</span></span>
+          <p>Upload form responses and send unique interest-based emails</p>
+        </div>
+      </a>
+      <div class="status-pills">
+        <span id="smtpPill" class="pill warn">Checking SMTP</span>
+        <span id="dbPill" class="pill warn">Checking database</span>
+        <span id="historyPill" class="pill">0 remembered</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel drop-panel">
+        <form id="uploadForm">
+          <label class="field" for="templateSelect">
+            <span>Email template</span>
+            <select id="templateSelect" name="templateId"></select>
+          </label>
+          <p class="hint" id="templateColumns">Choose a template to see the columns its spreadsheet needs. Email is always required.</p>
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <input id="fileInput" type="file" name="file" accept=".xls,.xlsx,.xlsm,.csv" hidden />
+            <div class="drop-icon">xls</div>
+            <h2>Upload Google Form Excel</h2>
+            <p>Drop a spreadsheet for the selected template. Email is always required. Other columns depend on the template. Unsubscribed addresses are skipped.</p>
+            <span class="file-chip" id="fileChip">No file selected</span>
+          </label>
+          <div class="actions">
+            <button type="button" id="previewBtn" class="btn ghost" disabled>Preview</button>
+            <button type="button" id="sendBtn" class="btn primary" disabled>Send unique emails</button>
+          </div>
+        </form>
+        <p class="hint" id="formHint">Sends, opens, and unsubscribes are stored in PostgreSQL. The Energy Summit template still expects Name, Company, Email ID, and Area of Interest, and only mails a new email + interest pair. Brochures live in <code>attachments/</code>.</p>
+      </section>
+
+      <section class="stats" id="stats" hidden>
+        <article><span>Total rows</span><strong id="statTotal">0</strong></article>
+        <article><span>Ready to send</span><strong id="statReady">0</strong></article>
+        <article><span>Skipped</span><strong id="statSkipped">0</strong></article>
+        <article><span>Sent / failed</span><strong id="statSent">—</strong></article>
+      </section>
+
+      <section class="panel" id="tablePanel" hidden>
+        <div class="panel-head">
+          <h3 id="tableTitle">Preview</h3>
+          <p id="tableCaption"></p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Row</th>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Email</th>
+                <th>Area of Interest</th>
+                <th>Attachment</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="rowsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Remembered unique sends</h3>
+          <p>Already emailed combinations, whether they were opened, and who unsubscribed. Open the <a href="/tracker">tracker</a> to filter by template.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Template</th>
+                <th>Area of Interest</th>
+                <th>Name</th>
+                <th>Sent at</th>
+                <th>Opened</th>
+                <th>Unsubscribed</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="7" class="empty">No emails remembered yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

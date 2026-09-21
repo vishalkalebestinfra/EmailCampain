@@ -1,0 +1,23 @@
+{
+  "name": "lead-emailer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upload lead XLS files and send unique interest-based emails with attachments",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "sample": "node scripts/create-sample-xls.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.0.1",
+    "nodemailer": "^6.9.16",
+    "pg": "^8.23.0",
+    "xlsx": "^0.18.5"
+  }
+}
