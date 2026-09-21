@@ -96,7 +96,7 @@ export function createSecureTransporter() {
   const user = stripQuotes(process.env.SMTP_USER);
   const pass = resolveSmtpPassword();
   const port = Number(process.env.SMTP_PORT || 465);
-  const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || 10000);
+  const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || 120000);
   const secure = String(process.env.SMTP_SECURE || "true") === "true" || port === 465;
 
   return nodemailer.createTransport({

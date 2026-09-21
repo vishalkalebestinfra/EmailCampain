@@ -22,6 +22,7 @@ import {
 } from "./store.js";
 import { ensurePlaceholderAttachments, sendReadyLeads, verifySmtp, getCompanyProfile } from "./mailer.js";
 import { getTemplate, listTemplates } from "./templateCatalog.js";
+import { maskEmailForLogs } from "./safeMail.js";
 
 const PIXEL = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
 const TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;
@@ -70,6 +71,9 @@ async function runSendJob(jobId, leads, template) {
         }
       } else {
         job.failed.push(result);
+        console.warn(
+          `Send failed ${maskEmailForLogs(result.email)}: ${result.reason || "unknown"}`
+        );
       }
       if ((index + 1) % 5 === 0 || index + 1 === total) {
         console.log(`Send job ${jobId.slice(0, 8)} progress ${index + 1}/${total}`);
