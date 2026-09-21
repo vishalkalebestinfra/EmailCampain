@@ -207,3 +207,9 @@ refreshBtn.addEventListener("click", () => {
 load().catch((error) => {
   trackerList.innerHTML = `<div class="empty-card">${escapeHtml(error.message)}</div>`;
 });
+
+// Poll so open counts appear within a few seconds of a recipient opening the email.
+window.setInterval(() => {
+  if (document.hidden) return;
+  load().catch(() => {});
+}, 5000);

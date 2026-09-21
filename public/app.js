@@ -301,3 +301,9 @@ dropzone.addEventListener("drop", (event) => {
 });
 
 refreshMeta().catch((error) => showToast(error.message));
+
+// Keep open counts fresh without a manual refresh.
+window.setInterval(() => {
+  if (document.hidden) return;
+  refreshMeta().catch(() => {});
+}, 5000);

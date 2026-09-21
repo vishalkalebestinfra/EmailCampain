@@ -100,10 +100,11 @@ function isPublicTrackingBase(url) {
 
 async function sendOpenPixel(req, res) {
   const token = cleanToken(req.params.token);
-  if (TOKEN_RE.test(token)) {
+  if (TOKEN_RE.test(token) && req.method !== "HEAD") {
     try {
       const ok = await recordOpen(token);
-      if (!ok) console.warn("Open pixel token not found", token.slice(0, 8));
+      if (ok) console.log("Open recorded", token.slice(0, 8));
+      else console.warn("Open pixel token not found", token.slice(0, 8));
     } catch (error) {
       console.error("Open tracking failed", error.message);
     }
@@ -114,11 +115,13 @@ async function sendOpenPixel(req, res) {
     Pragma: "no-cache",
     Expires: "0",
   });
+  if (req.method === "HEAD") return res.status(200).end();
   res.send(PIXEL);
 }
 
 // Tracking routes before static files so .gif open pixels are never missed.
 app.get("/t/o/:token", sendOpenPixel);
+app.head("/t/o/:token", sendOpenPixel);
 
 app.get("/t/e/:token", async (req, res) => {
   try {
@@ -218,7 +221,7 @@ app.get("/api/status", async (_req, res) => {
       public: trackingPublic,
       warning: trackingPublic
         ? ""
-        : "PUBLIC_BASE_URL is localhost. Gmail blocks open tracking unless this is a public HTTPS URL (Explore/Unsubscribe still work from your browser).",
+        : "Open counts will not update from Gmail while PUBLIC_BASE_URL is localhost. On the server set PUBLIC_BASE_URL to your public HTTPS URL (e.g. https://13.234.152.158.sslip.io), restart the app, then send new emails.",
     },
   });
 });
