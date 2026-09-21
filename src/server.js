@@ -58,7 +58,10 @@ async function runSendJob(jobId, leads, template) {
   const job = sendJobs.get(jobId);
   if (!job) return;
   job.status = "running";
-  console.log(`Send job ${jobId.slice(0, 8)} started (${leads.length} ready)`);
+  const timeoutMs = Number(process.env.SMTP_TIMEOUT_MS || 120000);
+  console.log(
+    `Send job ${jobId.slice(0, 8)} started (${leads.length} ready, SMTP_TIMEOUT_MS=${timeoutMs})`
+  );
   try {
     await sendReadyLeads(leads, template, async ({ index, total, result }) => {
       job.processed = index + 1;
@@ -71,7 +74,7 @@ async function runSendJob(jobId, leads, template) {
         }
       } else {
         job.failed.push(result);
-        console.warn(
+        console.error(
           `Send failed ${maskEmailForLogs(result.email)}: ${result.reason || "unknown"}`
         );
       }
@@ -80,9 +83,17 @@ async function runSendJob(jobId, leads, template) {
       }
     });
     job.status = "completed";
+    const reasonCounts = {};
+    for (const row of job.failed) {
+      const reason = row.reason || "unknown";
+      reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+    }
     console.log(
       `Send job ${jobId.slice(0, 8)} completed: ${job.sent.length} sent, ${job.failed.length} failed`
     );
+    if (job.failed.length) {
+      console.error(`Send job ${jobId.slice(0, 8)} failure reasons:`, reasonCounts);
+    }
   } catch (error) {
     job.status = "failed";
     job.error = error.message || "Send job failed";

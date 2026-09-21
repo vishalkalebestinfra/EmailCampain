@@ -54,9 +54,16 @@ export function isSmtpConfigured() {
 export function serializeMailError(err) {
   if (err && typeof err === "object") {
     const maybe = err;
+    const parts = [
+      typeof maybe.message === "string" ? maybe.message : "",
+      typeof maybe.response === "string" ? maybe.response.trim() : "",
+      maybe.responseCode != null ? `responseCode=${maybe.responseCode}` : "",
+      typeof maybe.code === "string" ? maybe.code : "",
+      typeof maybe.command === "string" ? `command=${maybe.command}` : "",
+    ].filter(Boolean);
     return {
       name: typeof maybe.name === "string" ? maybe.name : undefined,
-      message: typeof maybe.message === "string" ? maybe.message : "Mail send failed",
+      message: parts.join(" | ") || "Mail send failed",
       code: typeof maybe.code === "string" ? maybe.code : undefined,
     };
   }
