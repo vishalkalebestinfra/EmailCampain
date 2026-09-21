@@ -63,8 +63,12 @@ export function normalizeInterest(value) {
     .trim();
 }
 
-export function uniquenessKey(email, interestLabel) {
-  return `${String(email).trim().toLowerCase()}::${normalizeInterest(interestLabel)}`;
+export function uniquenessKey(email, interestLabel, templateId = "") {
+  return [
+    String(email).trim().toLowerCase(),
+    String(templateId || "").trim(),
+    normalizeInterest(interestLabel),
+  ].join("::");
 }
 
 export function uniqueAttachmentNames(interests) {

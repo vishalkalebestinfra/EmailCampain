@@ -74,7 +74,16 @@ export async function verifySmtp() {
     return { ok: true };
   } catch (error) {
     const details = serializeMailError(error);
-    return { ok: false, error: details.message };
+    const message = details.message || "Mail send failed";
+    if (/535|authentication failed|invalid login/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          `${message}. Check SMTP_USER/SMTP_PASS (use a Zoho app password if 2FA is on), ` +
+          "and SMTP_HOST (smtppro.zoho.in for custom-domain Workplace).",
+      };
+    }
+    return { ok: false, error: message };
   }
 }
 
@@ -143,6 +152,7 @@ export async function sendReadyLeads(leads, template, onProgress) {
       const result = {
         ...lead,
         templateId: template.id,
+        templateName: template.name,
         status: "sent",
         reason: "Email sent",
         messageId: sent.messageId,

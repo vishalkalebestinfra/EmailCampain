@@ -101,7 +101,7 @@ async function refreshMeta() {
   } else {
     const detail = String(status.smtp.error || "").trim();
     const authFailed = /authentication failed|invalid login|535/i.test(detail);
-    const missing = /set zoho smtp|not configured|smtp_user|smtp_pass/i.test(detail);
+    const missing = /set zoho smtp|smtp_user|smtp_pass/i.test(detail) && !authFailed;
     smtpPill.textContent = authFailed
       ? "SMTP login failed"
       : missing

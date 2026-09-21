@@ -103,6 +103,7 @@ export function createSecureTransporter() {
     host: stripQuotes(process.env.SMTP_HOST),
     port,
     secure,
+    requireTLS: !secure && port === 587,
     disableFileAccess: true,
     disableUrlAccess: true,
     connectionTimeout: timeoutMs,

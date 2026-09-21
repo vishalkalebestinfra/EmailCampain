@@ -126,7 +126,7 @@ export function parseWorkbook(buffer, template, suppression) {
     }
 
     if (!useInterests) {
-      const key = uniquenessKey(base.email, "");
+      const key = uniquenessKey(base.email, "", template.id);
       if (seenInFile.has(key)) {
         return emptyInterestRow(base, { status: "skipped", reason: "Duplicate email in this file" });
       }
@@ -149,7 +149,7 @@ export function parseWorkbook(buffer, template, suppression) {
     const inFile = [];
 
     for (const interest of parsedInterests) {
-      const key = uniquenessKey(base.email, interest.matchedLabel);
+      const key = uniquenessKey(base.email, interest.matchedLabel, template.id);
       if (seenInFile.has(key)) {
         inFile.push(interest);
         continue;

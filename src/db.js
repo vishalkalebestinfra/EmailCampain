@@ -2,11 +2,12 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
-import { normalizeInterest, uniquenessKey } from "./interests.js";
+import { uniquenessKey } from "./interests.js";
 import { getTemplate, SUMMIT_TEMPLATE_ID } from "./templateCatalog.js";
 
 const { Pool } = pg;
 const STORE_PATH = path.resolve("data/sent-records.json");
+const STORE_MIGRATED_PATH = path.resolve("data/sent-records.json.migrated");
 
 let pool = null;
 let readyError = "Database is not connected.";
@@ -72,6 +73,7 @@ async function ensureSchema() {
       delivery_id UUID NOT NULL,
       email TEXT NOT NULL REFERENCES contacts (email),
       template_id TEXT NOT NULL,
+      template_name TEXT NOT NULL DEFAULT '',
       interest TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL DEFAULT '',
       company TEXT NOT NULL DEFAULT '',
@@ -90,11 +92,26 @@ async function ensureSchema() {
 
     CREATE INDEX IF NOT EXISTS sends_delivery_id ON sends (delivery_id);
   `);
+
+  await pool.query(`
+    ALTER TABLE sends
+    ADD COLUMN IF NOT EXISTS template_name TEXT NOT NULL DEFAULT ''
+  `);
+
+  await pool.query(`
+    UPDATE sends AS s
+    SET template_name = COALESCE(NULLIF(s.template_name, ''), $2)
+    WHERE s.template_id = $1 AND (s.template_name IS NULL OR s.template_name = '')
+  `, [SUMMIT_TEMPLATE_ID, getTemplate(SUMMIT_TEMPLATE_ID)?.name || "Energy Summit thank-you"]);
 }
 
 function stableToken(prefix, key) {
   const digest = crypto.createHash("sha256").update(`${prefix}:${key}`).digest("base64url");
   return digest.slice(0, 43);
+}
+
+function templateNameFor(templateId, fallback = "") {
+  return getTemplate(templateId)?.name || fallback || templateId || "";
 }
 
 async function migrateSentRecords() {
@@ -119,7 +136,9 @@ async function migrateSentRecords() {
     const email = String(record.email || "").trim().toLowerCase();
     const interest = String(record.interest || "").trim();
     if (!email) continue;
-    const dedupe = `${email}::${SUMMIT_TEMPLATE_ID}::${normalizeInterest(interest)}`;
+    const templateId = String(record.templateId || SUMMIT_TEMPLATE_ID).trim() || SUMMIT_TEMPLATE_ID;
+    const templateName = String(record.templateName || "").trim() || templateNameFor(templateId);
+    const dedupe = uniquenessKey(email, interest, templateId);
     if (seen.has(dedupe)) continue;
     seen.add(dedupe);
 
@@ -138,17 +157,22 @@ async function migrateSentRecords() {
 
     await pool.query(
       `INSERT INTO sends (
-         id, delivery_id, email, template_id, interest, name, company, subject,
+         id, delivery_id, email, template_id, template_name, interest, name, company, subject,
          message_id, sent_at, tracking_token, unsubscribe_token
        ) VALUES (
-         $1, $1, $2, $3, $4, $5, $6, '',
-         $7, $8, $9, $10
+         $1, $1, $2, $3, $4, $5, $6, $7, '',
+         $8, $9, $10, $11
        )
-       ON CONFLICT (email, template_id, interest) DO NOTHING`,
+       ON CONFLICT (email, template_id, interest) DO UPDATE
+       SET template_name = CASE
+         WHEN sends.template_name = '' THEN EXCLUDED.template_name
+         ELSE sends.template_name
+       END`,
       [
         id,
         email,
-        SUMMIT_TEMPLATE_ID,
+        templateId,
+        templateName,
         interest,
         String(record.name || ""),
         String(record.company || ""),
@@ -158,6 +182,16 @@ async function migrateSentRecords() {
         stableToken("unsub", key),
       ]
     );
+  }
+
+  try {
+    await fs.rename(STORE_PATH, STORE_MIGRATED_PATH);
+  } catch {
+    try {
+      await fs.writeFile(STORE_PATH, `${JSON.stringify({ records: [] }, null, 2)}\n`, "utf8");
+    } catch {
+      // ignore archive failures; DB is the source of truth
+    }
   }
 }
 
@@ -169,19 +203,25 @@ export async function countSends() {
 
 export async function loadSuppression(templateId) {
   const sent = await pool.query(
-    "SELECT email, interest FROM sends WHERE template_id = $1",
+    "SELECT email, interest, template_id FROM sends WHERE template_id = $1",
     [templateId]
   );
   const unsubscribed = await pool.query(
     "SELECT email FROM contacts WHERE unsubscribed_at IS NOT NULL"
   );
   return {
-    sentKeys: new Set(sent.rows.map((row) => uniquenessKey(row.email, row.interest))),
+    sentKeys: new Set(
+      sent.rows.map((row) => uniquenessKey(row.email, row.interest, row.template_id || templateId))
+    ),
     unsubscribed: new Set(unsubscribed.rows.map((row) => row.email)),
   };
 }
 
 export async function rememberSent(entries) {
+  if (!isDbReady()) {
+    throw new Error(getDbError() || "Database is not connected.");
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -194,6 +234,8 @@ export async function rememberSent(entries) {
       const interests = labels.length ? labels : [""];
       const deliveryId = entry.deliveryId || crypto.randomUUID();
       const sentAt = entry.sentAt ? new Date(entry.sentAt) : new Date();
+      const templateId = String(entry.templateId || "").trim();
+      const templateName = String(entry.templateName || "").trim() || templateNameFor(templateId);
 
       await client.query(
         `INSERT INTO contacts (email, name)
@@ -212,18 +254,19 @@ export async function rememberSent(entries) {
           : crypto.randomBytes(24).toString("base64url");
         await client.query(
           `INSERT INTO sends (
-             id, delivery_id, email, template_id, interest, name, company, subject,
+             id, delivery_id, email, template_id, template_name, interest, name, company, subject,
              message_id, sent_at, tracking_token, unsubscribe_token
            ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8,
-             $9, $10, $11, $12
+             $1, $2, $3, $4, $5, $6, $7, $8, $9,
+             $10, $11, $12, $13
            )
            ON CONFLICT (email, template_id, interest) DO NOTHING`,
           [
             crypto.randomUUID(),
             deliveryId,
             email,
-            entry.templateId,
+            templateId,
+            templateName,
             String(interest || ""),
             String(entry.name || ""),
             String(entry.company || ""),
@@ -250,6 +293,7 @@ export async function listHistory() {
     `SELECT
        s.email,
        s.template_id,
+       s.template_name,
        s.interest,
        s.name,
        s.company,
@@ -267,7 +311,7 @@ export async function listHistory() {
     return {
       email: row.email,
       templateId: row.template_id,
-      templateName: template?.name || row.template_id,
+      templateName: row.template_name || template?.name || row.template_id,
       interest: row.interest,
       name: row.name,
       company: row.company,
