@@ -1,5 +1,6 @@
 import XLSX from "xlsx";
 import {
+  ALL_BROCHURE_ATTACHMENTS,
   formatInterestList,
   parseInterests,
   uniqueAttachmentNames,
@@ -62,6 +63,21 @@ function emptyInterestRow(base, extra = {}) {
   return rowPayload(base, [], extra);
 }
 
+function fixedBrochureRow(base, template, extra = {}) {
+  const files = Array.isArray(template.attachments) && template.attachments.length
+    ? [...template.attachments]
+    : [...ALL_BROCHURE_ATTACHMENTS];
+  return {
+    ...base,
+    interest: "",
+    interests: [],
+    interestIds: [],
+    attachment: files.join(", ") || "—",
+    attachments: files,
+    ...extra,
+  };
+}
+
 export function parseWorkbook(buffer, template, suppression) {
   const columns = columnsForTemplate(template);
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
@@ -84,6 +100,7 @@ export function parseWorkbook(buffer, template, suppression) {
   }
 
   const useInterests = template.mode === "interest-brochures";
+  const useFixedBrochures = template.mode === "fixed-brochures";
   const seenInFile = new Set();
   const classified = rows.map((row, index) => {
     const fields = {};
@@ -104,9 +121,11 @@ export function parseWorkbook(buffer, template, suppression) {
 
     const parsedInterests = useInterests ? parseInterests(fields.interest) : [];
 
-    const describe = (extra) => (
-      useInterests ? rowPayload(base, parsedInterests, extra) : emptyInterestRow(base, extra)
-    );
+    const describe = (extra) => {
+      if (useInterests) return rowPayload(base, parsedInterests, extra);
+      if (useFixedBrochures) return fixedBrochureRow(base, template, extra);
+      return emptyInterestRow(base, extra);
+    };
 
     if (!base.email) {
       return describe({ status: "skipped", reason: "No email present" });
@@ -128,13 +147,13 @@ export function parseWorkbook(buffer, template, suppression) {
     if (!useInterests) {
       const key = uniquenessKey(base.email, "", template.id);
       if (seenInFile.has(key)) {
-        return emptyInterestRow(base, { status: "skipped", reason: "Duplicate email in this file" });
+        return describe({ status: "skipped", reason: "Duplicate email in this file" });
       }
       if (suppression.sentKeys.has(key)) {
-        return emptyInterestRow(base, { status: "skipped", reason: "Already emailed with this template" });
+        return describe({ status: "skipped", reason: "Already emailed with this template" });
       }
       seenInFile.add(key);
-      return emptyInterestRow(base, { status: "ready", reason: "Unique email for this template" });
+      return describe({ status: "ready", reason: "Unique email for this template" });
     }
 
     if (!parsedInterests.length) {

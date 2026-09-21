@@ -29,6 +29,10 @@ function ensureTracking(html, openPixelUrl, unsubscribeUrl) {
   return next;
 }
 
+function bookingUrl() {
+  return String(process.env.BOOKING_URL || process.env.COMPANY_WEBSITE || "https://www.bestinfra.org/").trim();
+}
+
 function summitContent(lead) {
   const name = lead.name || "there";
   const labels = Array.isArray(lead.interests) && lead.interests.length
@@ -80,12 +84,45 @@ function summitContent(lead) {
   };
 }
 
+function generalThankYouContent(template, lead) {
+  const name = lead.name || "there";
+  const bookUrl = bookingUrl();
+  const subject = template.subject || "Thank You for Visiting Us | Best Infra";
+  const text = [
+    `Hi ${name},`,
+    "",
+    "Thank you for visiting our stall at the Energy Efficiency Summit 2026 (16–18 September).",
+    "",
+    "It was a pleasure connecting with you and learning about your priorities around energy efficiency and sustainability. We would be glad to continue the conversation and explore how our solutions can help improve energy performance, operational efficiency, and sustainability.",
+    "",
+    "We have attached our brochures with this email.",
+    "",
+    `Book a 15-minute call: ${bookUrl}`,
+    "",
+    "If you have any specific requirements, contact marketrelations@bestinfra.tech.",
+    "",
+    "Best Regards,",
+    "Team Best Infra",
+  ];
+
+  return {
+    subject,
+    text,
+    vars: {
+      LEAD_NAME: escapeHtml(name),
+      BookingURL: escapeHtml(bookUrl),
+    },
+  };
+}
+
 function mergeContent(template, lead) {
   const vars = {};
   for (const [key, value] of Object.entries(lead.fields || {})) {
     vars[key.toUpperCase()] = escapeHtml(value);
   }
   if (!vars.NAME) vars.NAME = escapeHtml(lead.name || "there");
+  vars.LEAD_NAME = vars.NAME;
+  vars.BookingURL = escapeHtml(bookingUrl());
   const subjectTemplate = template.subject || template.name;
   const subject = fill(subjectTemplate, vars);
   const text = [
@@ -96,10 +133,14 @@ function mergeContent(template, lead) {
   return { subject, text, vars };
 }
 
+function contentForTemplate(template, lead) {
+  if (template.mode === "interest-brochures") return summitContent(lead);
+  if (template.mode === "fixed-brochures") return generalThankYouContent(template, lead);
+  return mergeContent(template, lead);
+}
+
 export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl, exploreUrl }) {
-  const built = template.mode === "interest-brochures"
-    ? summitContent(lead)
-    : mergeContent(template, lead);
+  const built = contentForTemplate(template, lead);
 
   const htmlSource = await fs.readFile(path.resolve(template.htmlPath), "utf8");
   const html = ensureTracking(fill(htmlSource, {
@@ -107,6 +148,7 @@ export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl,
     OPEN_PIXEL_URL: openPixelUrl || "",
     UNSUBSCRIBE_URL: unsubscribeUrl || "",
     EXPLORE_URL: exploreUrl || "https://bestinfra.org/",
+    BookingURL: built.vars.BookingURL || escapeHtml(bookingUrl()),
   }), openPixelUrl, unsubscribeUrl);
 
   const text = [

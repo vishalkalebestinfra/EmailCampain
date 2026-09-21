@@ -2,7 +2,18 @@ export const ATTACHMENT_FILES = {
   smartSolutions: "Smart Solutions.pdf",
   companyProfile: "Company Profile Exhibition.pdf",
   ev: "EV.pdf",
+  solar: "Solar.pdf",
+  ultrasonicWaterMeter: "Ultrasonic Water Meter.pdf",
 };
+
+/** All brochure PDFs sent with the general thank-you template */
+export const ALL_BROCHURE_ATTACHMENTS = [
+  ATTACHMENT_FILES.smartSolutions,
+  ATTACHMENT_FILES.ev,
+  ATTACHMENT_FILES.solar,
+  ATTACHMENT_FILES.ultrasonicWaterMeter,
+  ATTACHMENT_FILES.companyProfile,
+];
 
 export const INTERESTS = [
   {

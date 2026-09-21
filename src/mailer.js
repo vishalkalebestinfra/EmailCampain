@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ATTACHMENT_FILES, INTERESTS } from "./interests.js";
+import { ALL_BROCHURE_ATTACHMENTS, ATTACHMENT_FILES, INTERESTS } from "./interests.js";
 import { publicBaseUrl } from "./store.js";
 import { buildEmail } from "./templates.js";
 import {
@@ -24,6 +24,7 @@ export async function ensurePlaceholderAttachments() {
 function allowedAttachmentPath(filename) {
   const allowed = new Set([
     ...Object.values(ATTACHMENT_FILES),
+    ...ALL_BROCHURE_ATTACHMENTS,
     ...INTERESTS.flatMap((item) => item.attachments || []),
   ]);
   const base = path.basename(filename);
@@ -32,6 +33,18 @@ function allowedAttachmentPath(filename) {
   const fullPath = path.resolve(root, base);
   if (fullPath !== root && !fullPath.startsWith(`${root}${path.sep}`)) return null;
   return fullPath;
+}
+
+function attachmentNamesFor(template, lead) {
+  if (Array.isArray(lead.attachments) && lead.attachments.length) {
+    return lead.attachments;
+  }
+  if (template.mode === "fixed-brochures") {
+    return Array.isArray(template.attachments) && template.attachments.length
+      ? template.attachments
+      : ALL_BROCHURE_ATTACHMENTS;
+  }
+  return [];
 }
 
 async function loadBrochureBuffer(filename) {
@@ -106,17 +119,19 @@ export async function sendLeadEmail(lead, template, transport) {
     exploreUrl,
   });
 
-  const files = template.mode === "interest-brochures" && Array.isArray(lead.attachments)
-    ? lead.attachments
-    : [];
+  const needsBrochures = template.mode === "interest-brochures" || template.mode === "fixed-brochures";
+  const files = needsBrochures ? attachmentNamesFor(template, lead) : [];
   const attachments = [];
   for (const filename of files) {
     const brochure = await loadBrochureBuffer(filename);
     if (brochure) attachments.push(brochure);
   }
 
-  if (template.mode === "interest-brochures" && !attachments.length) {
-    throw new Error(`No brochure files found in attachments/ for ${lead.interest || "this interest"}`);
+  if (needsBrochures && !attachments.length) {
+    const label = template.mode === "fixed-brochures"
+      ? "the general thank-you pack"
+      : (lead.interest || "this interest");
+    throw new Error(`No brochure files found in attachments/ for ${label}`);
   }
 
   const mailer = transport || createSecureTransporter();
@@ -128,7 +143,7 @@ export async function sendLeadEmail(lead, template, transport) {
     attachments
   );
 
-  console.log(`Sent ${lead.interest} mail to ${maskEmailForLogs(lead.email)} with ${attachments.map((item) => item.filename).join(", ")}`);
+  console.log(`Sent ${template.name} to ${maskEmailForLogs(lead.email)} with ${attachments.map((item) => item.filename).join(", ") || "no attachments"}`);
 
   return {
     messageId: info.messageId,

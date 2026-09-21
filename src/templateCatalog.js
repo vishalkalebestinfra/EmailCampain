@@ -1,4 +1,7 @@
+import { ALL_BROCHURE_ATTACHMENTS } from "./interests.js";
+
 export const SUMMIT_TEMPLATE_ID = "summit-thank-you";
+export const GENERAL_THANKYOU_TEMPLATE_ID = "general-thank-you";
 
 const EMAIL_COLUMN = {
   key: "email",
@@ -6,6 +9,33 @@ const EMAIL_COLUMN = {
   required: true,
   aliases: ["email id", "email", "email address", "e-mail"],
 };
+
+const CONTACT_COLUMNS = [
+  {
+    key: "timestamp",
+    label: "Timestamp",
+    required: false,
+    aliases: ["timestamp", "time stamp"],
+  },
+  {
+    key: "name",
+    label: "Name",
+    required: false,
+    aliases: ["your good name", "name", "full name", "contact name"],
+  },
+  {
+    key: "company",
+    label: "Company",
+    required: false,
+    aliases: ["company / organization", "company", "organization", "organisation"],
+  },
+  {
+    key: "mobile",
+    label: "Mobile",
+    required: false,
+    aliases: ["mobile number / whatsapp", "mobile", "whatsapp", "phone", "mobile number"],
+  },
+];
 
 export const TEMPLATES = [
   {
@@ -15,36 +45,25 @@ export const TEMPLATES = [
     mode: "interest-brochures",
     columns: [
       EMAIL_COLUMN,
-      {
-        key: "timestamp",
-        label: "Timestamp",
-        required: false,
-        aliases: ["timestamp", "time stamp"],
-      },
-      {
-        key: "name",
-        label: "Name",
-        required: false,
-        aliases: ["your good name", "name", "full name", "contact name"],
-      },
-      {
-        key: "company",
-        label: "Company",
-        required: false,
-        aliases: ["company / organization", "company", "organization", "organisation"],
-      },
-      {
-        key: "mobile",
-        label: "Mobile",
-        required: false,
-        aliases: ["mobile number / whatsapp", "mobile", "whatsapp", "phone", "mobile number"],
-      },
+      ...CONTACT_COLUMNS,
       {
         key: "interest",
         label: "Area of Interest",
         required: true,
         aliases: ["area of interest", "interest"],
       },
+    ],
+  },
+  {
+    id: GENERAL_THANKYOU_TEMPLATE_ID,
+    name: "General summit thank-you",
+    htmlPath: "Template/ThankyouEmail.html",
+    mode: "fixed-brochures",
+    subject: "Thank You for Visiting Us | Best Infra",
+    attachments: ALL_BROCHURE_ATTACHMENTS,
+    columns: [
+      EMAIL_COLUMN,
+      ...CONTACT_COLUMNS,
     ],
   },
 ];
