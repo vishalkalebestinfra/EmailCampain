@@ -1,6 +1,7 @@
 export {
   confirmUnsubscribe,
   countSends,
+  ensureOpened,
   findUnsubscribe,
   getDbError,
   initDb as initStore,
@@ -8,6 +9,7 @@ export {
   listHistory,
   loadSuppression,
   publicBaseUrl,
+  recordExpertInterest,
   recordOpen,
   rememberSent,
 } from "./db.js";

@@ -8,7 +8,8 @@ const templateColumns = document.querySelector("#templateColumns");
 const stats = document.querySelector("#stats");
 const tablePanel = document.querySelector("#tablePanel");
 const rowsBody = document.querySelector("#rowsBody");
-const historyBody = document.querySelector("#historyBody");
+const historyList = document.querySelector("#historyList");
+const trackingWarningHome = document.querySelector("#trackingWarningHome");
 const toast = document.querySelector("#toast");
 
 let selectedFile = null;
@@ -69,9 +70,42 @@ function setStats({ total, ready, skipped, sent, failed }) {
 }
 
 function formatWhen(value) {
-  if (!value) return "";
+  if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function groupHistory(records) {
+  const groups = new Map();
+  for (const record of records) {
+    const key = record.deliveryId || `${record.email}::${record.templateId}::${record.sentAt}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        ...record,
+        interests: record.interest ? [record.interest] : [],
+        openCount: Number(record.openCount || 0),
+        expertClickCount: Number(record.expertClickCount || 0),
+      });
+      continue;
+    }
+    if (record.interest && !existing.interests.includes(record.interest)) {
+      existing.interests.push(record.interest);
+    }
+    existing.openCount = Math.max(existing.openCount, Number(record.openCount || 0));
+    existing.expertClickCount = Math.max(existing.expertClickCount, Number(record.expertClickCount || 0));
+    if (record.openedAt) existing.openedAt = existing.openedAt || record.openedAt;
+    if (record.unsubscribedAt) existing.unsubscribedAt = record.unsubscribedAt;
+  }
+  return [...groups.values()];
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 async function refreshMeta() {
@@ -116,32 +150,58 @@ async function refreshMeta() {
   dbPill.className = `pill ${status.database?.ok ? "ok" : "warn"}`;
   dbPill.title = status.database?.error || "";
 
+  if (status.tracking?.warning) {
+    trackingWarningHome.hidden = false;
+    trackingWarningHome.textContent = status.tracking.warning;
+  } else {
+    trackingWarningHome.hidden = true;
+    trackingWarningHome.textContent = "";
+  }
+
   if (!historyRes.ok) {
     const payload = await historyRes.json().catch(() => ({}));
     document.querySelector("#historyPill").textContent = "History unavailable";
-    historyBody.innerHTML = `<tr><td colspan="7" class="empty">${payload.error || "Database is not connected."}</td></tr>`;
+    historyList.innerHTML = `<div class="empty-card">${escapeHtml(payload.error || "Database is not connected.")}</div>`;
     return;
   }
 
   const history = await historyRes.json();
-  document.querySelector("#historyPill").textContent = `${history.records.length} remembered`;
-  if (!history.records.length) {
-    historyBody.innerHTML = `<tr><td colspan="7" class="empty">No emails remembered yet.</td></tr>`;
+  const grouped = groupHistory(history.records || []);
+  document.querySelector("#historyPill").textContent = `${grouped.length} remembered`;
+  if (!grouped.length) {
+    historyList.innerHTML = `<div class="empty-card">No emails remembered yet.</div>`;
     return;
   }
-  historyBody.innerHTML = history.records
-    .map(
-      (record) => `
-      <tr>
-        <td>${record.email}</td>
-        <td>${record.templateName || "—"}</td>
-        <td>${record.interest || "—"}</td>
-        <td>${record.name || "—"}</td>
-        <td>${formatWhen(record.sentAt)}</td>
-        <td>${record.openedAt ? `<span class="badge opened">Opened</span> ${formatWhen(record.openedAt)}` : `<span class="badge unopened">Not opened</span>`}</td>
-        <td>${record.unsubscribedAt ? `Yes ${formatWhen(record.unsubscribedAt)}` : "No"}</td>
-      </tr>`
-    )
+  historyList.innerHTML = grouped
+    .map((record) => {
+      const interests = (record.interests || []).filter(Boolean).join(", ") || "—";
+      const openBadge = record.openedAt
+        ? `<span class="badge opened">${escapeHtml(record.openCount || 1)} opens</span>`
+        : `<span class="badge unopened">Not opened</span>`;
+      const exploreBadge = record.expertClickCount
+        ? `<span class="badge expert">Explore ${escapeHtml(record.expertClickCount)}</span>`
+        : "";
+      const unsubBadge = record.unsubscribedAt
+        ? `<span class="badge failed">Unsubscribed</span>`
+        : "";
+      return `
+      <article class="history-card">
+        <div>
+          <h4>${escapeHtml(record.name || record.email)}</h4>
+          <p>${escapeHtml(record.email)} · ${escapeHtml(record.company || "No company")}</p>
+          <p>${escapeHtml(record.templateName || "—")} · ${escapeHtml(interests)}</p>
+        </div>
+        <div>
+          <p style="margin:0;font-size:12px;font-weight:700;color:#575757;">Sent</p>
+          <p style="margin:4px 0 0;font-size:13px;color:#0d1e35;font-weight:600;">${escapeHtml(formatWhen(record.sentAt))}</p>
+        </div>
+        <div class="history-metrics">
+          ${openBadge}
+          ${exploreBadge}
+          ${unsubBadge}
+        </div>
+      </article>`;
+    })
     .join("");
 }
 

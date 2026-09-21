@@ -88,26 +88,14 @@
 
       <section class="panel">
         <div class="panel-head">
-          <h3>Remembered unique sends</h3>
-          <p>Already emailed combinations, whether they were opened, and who unsubscribed. Open the <a href="/tracker">tracker</a> to filter by template.</p>
+          <div>
+            <h3>Remembered unique sends</h3>
+            <p>Already emailed combinations with open counts and Explore clicks. Open the <a href="/tracker">tracker</a> for filters.</p>
+          </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Template</th>
-                <th>Area of Interest</th>
-                <th>Name</th>
-                <th>Sent at</th>
-                <th>Opened</th>
-                <th>Unsubscribed</th>
-              </tr>
-            </thead>
-            <tbody id="historyBody">
-              <tr><td colspan="7" class="empty">No emails remembered yet.</td></tr>
-            </tbody>
-          </table>
+        <div id="trackingWarningHome" class="notice warn" hidden></div>
+        <div id="historyList" class="history-list">
+          <div class="empty-card">No emails remembered yet.</div>
         </div>
       </section>
     </main>

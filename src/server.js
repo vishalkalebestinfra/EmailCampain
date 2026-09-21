@@ -13,7 +13,10 @@ import {
   isDbReady,
   listHistory,
   loadSuppression,
+  publicBaseUrl,
+  recordExpertInterest,
   recordOpen,
+  ensureOpened,
   rememberSent,
 } from "./store.js";
 import { ensurePlaceholderAttachments, sendReadyLeads, verifySmtp, getCompanyProfile } from "./mailer.js";
@@ -36,11 +39,6 @@ const upload = multer({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.resolve("public")));
-
-app.get("/tracker", (_req, res) => {
-  res.sendFile(path.resolve("public/tracker.html"));
-});
 
 function receiveWorkbook(req, res, next) {
   upload.single("file")(req, res, (error) => {
@@ -83,42 +81,29 @@ function page(title, body) {
     h1 { margin: 0 0 10px; font-size: 24px; color: #163b7c; }
     p { margin: 0; line-height: 1.5; color: #575757; }
     button { margin-top: 18px; border: 0; border-radius: 16px; padding: 12px 16px; background: #55b56c; color: white; font-weight: 650; cursor: pointer; }
+    a { color: #163b7c; font-weight: 650; }
+    strong { color: #0d1e35; }
   </style>
 </head>
 <body><main>${body}</main></body>
 </html>`;
 }
 
-app.get("/api/templates", (_req, res) => {
-  res.json({ templates: listTemplates() });
-});
-
-app.get("/api/status", async (_req, res) => {
-  const smtp = await verifySmtp();
-  const database = { ok: isDbReady(), error: isDbReady() ? "" : getDbError() };
-  const sentCount = database.ok ? await countSends() : 0;
-  res.json({
-    company: getCompanyProfile(),
-    smtp,
-    database,
-    sentCount,
-  });
-});
-
-app.get("/api/history", requireDatabase, async (_req, res) => {
+function isPublicTrackingBase(url) {
   try {
-    const records = await listHistory();
-    res.json({ records });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
+    const host = new URL(url).hostname.toLowerCase();
+    return host !== "localhost" && host !== "127.0.0.1" && !host.endsWith(".local");
+  } catch {
+    return false;
   }
-});
+}
 
-app.get("/t/o/:token", async (req, res) => {
+async function sendOpenPixel(req, res) {
   const token = cleanToken(req.params.token);
   if (TOKEN_RE.test(token)) {
     try {
-      await recordOpen(token);
+      const ok = await recordOpen(token);
+      if (!ok) console.warn("Open pixel token not found", token.slice(0, 8));
     } catch (error) {
       console.error("Open tracking failed", error.message);
     }
@@ -127,8 +112,34 @@ app.get("/t/o/:token", async (req, res) => {
     "Content-Type": "image/gif",
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
     Pragma: "no-cache",
+    Expires: "0",
   });
   res.send(PIXEL);
+}
+
+// Tracking routes before static files so .gif open pixels are never missed.
+app.get("/t/o/:token", sendOpenPixel);
+
+app.get("/t/e/:token", async (req, res) => {
+  try {
+    const token = cleanToken(req.params.token);
+    if (TOKEN_RE.test(token) && isDbReady()) {
+      try {
+        await ensureOpened(token);
+      } catch (error) {
+        console.error("Explore open fallback failed", error.message);
+      }
+      try {
+        await recordExpertInterest(token);
+      } catch (error) {
+        console.error("Explore click tracking failed", error.message);
+      }
+    }
+    res.redirect(302, "https://bestinfra.org/");
+  } catch (error) {
+    console.error("Explore redirect failed", error.message);
+    res.redirect(302, "https://bestinfra.org/");
+  }
 });
 
 app.get("/u/:token", async (req, res) => {
@@ -147,13 +158,15 @@ app.get("/u/:token", async (req, res) => {
         `<h1>You are unsubscribed</h1><p>${escapeHtml(contact.email)} will not receive further emails from us.</p>`
       ));
     }
+
+    const confirmed = await confirmUnsubscribe(token);
+    if (!confirmed) {
+      return res.status(404).type("html").send(page("Unsubscribe", "<h1>Link not found</h1><p>This unsubscribe link is not valid.</p>"));
+    }
+
     res.type("html").send(page(
-      "Unsubscribe",
-      `<h1>Unsubscribe</h1>
-       <p>Stop emails to ${escapeHtml(contact.email)}?</p>
-       <form method="post" action="/u/${encodeURIComponent(token)}">
-         <button type="submit">Confirm unsubscribe</button>
-       </form>`
+      "Unsubscribed",
+      `<h1>You are unsubscribed</h1><p>${escapeHtml(confirmed.email)} will not receive further emails from us.</p>`
     ));
   } catch (error) {
     res.status(500).type("html").send(page("Unsubscribe", `<h1>Something went wrong</h1><p>${escapeHtml(error.message)}</p>`));
@@ -176,6 +189,46 @@ app.post("/u/:token", async (req, res) => {
     ));
   } catch (error) {
     res.status(500).type("html").send(page("Unsubscribe", `<h1>Something went wrong</h1><p>${escapeHtml(error.message)}</p>`));
+  }
+});
+
+app.use(express.static(path.resolve("public")));
+
+app.get("/tracker", (_req, res) => {
+  res.sendFile(path.resolve("public/tracker.html"));
+});
+
+app.get("/api/templates", (_req, res) => {
+  res.json({ templates: listTemplates() });
+});
+
+app.get("/api/status", async (_req, res) => {
+  const smtp = await verifySmtp();
+  const database = { ok: isDbReady(), error: isDbReady() ? "" : getDbError() };
+  const sentCount = database.ok ? await countSends() : 0;
+  const trackingBase = publicBaseUrl();
+  const trackingPublic = isPublicTrackingBase(trackingBase);
+  res.json({
+    company: getCompanyProfile(),
+    smtp,
+    database,
+    sentCount,
+    tracking: {
+      baseUrl: trackingBase,
+      public: trackingPublic,
+      warning: trackingPublic
+        ? ""
+        : "PUBLIC_BASE_URL is localhost. Gmail blocks open tracking unless this is a public HTTPS URL (Explore/Unsubscribe still work from your browser).",
+    },
+  });
+});
+
+app.get("/api/history", requireDatabase, async (_req, res) => {
+  try {
+    const records = await listHistory();
+    res.json({ records });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -243,5 +296,11 @@ if (!isDbReady()) {
 }
 
 app.listen(port, () => {
+  const base = publicBaseUrl();
   console.log(`Lead Emailer running at http://localhost:${port}`);
+  if (!isPublicTrackingBase(base)) {
+    console.warn(
+      `Open tracking will not work from Gmail while PUBLIC_BASE_URL is "${base}". Set a public HTTPS URL.`
+    );
+  }
 });

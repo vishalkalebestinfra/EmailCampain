@@ -97,11 +97,13 @@ export async function sendLeadEmail(lead, template, transport) {
   const base = publicBaseUrl();
   const openPixelUrl = `${base}/t/o/${trackingToken}.gif`;
   const unsubscribeUrl = `${base}/u/${unsubscribeToken}`;
+  const exploreUrl = `${base}/t/e/${trackingToken}`;
   const { subject, html, text } = await buildEmail({
     template,
     lead,
     openPixelUrl,
     unsubscribeUrl,
+    exploreUrl,
   });
 
   const files = template.mode === "interest-brochures" && Array.isArray(lead.attachments)

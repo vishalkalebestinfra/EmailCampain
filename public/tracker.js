@@ -1,5 +1,8 @@
 const templateFilter = document.querySelector("#templateFilter");
-const trackerBody = document.querySelector("#trackerBody");
+const searchInput = document.querySelector("#searchInput");
+const trackerList = document.querySelector("#trackerList");
+const trackingWarning = document.querySelector("#trackingWarning");
+const refreshBtn = document.querySelector("#refreshBtn");
 
 let records = [];
 let loadError = "";
@@ -18,53 +21,127 @@ function formatWhen(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
+function groupRecords(rows) {
+  const groups = new Map();
+  for (const record of rows) {
+    const key = record.deliveryId || `${record.email}::${record.templateId}::${record.sentAt}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        ...record,
+        interests: record.interest ? [record.interest] : [],
+        openCount: Number(record.openCount || 0),
+        expertClickCount: Number(record.expertClickCount || 0),
+      });
+      continue;
+    }
+    if (record.interest && !existing.interests.includes(record.interest)) {
+      existing.interests.push(record.interest);
+    }
+    existing.openCount = Math.max(existing.openCount, Number(record.openCount || 0));
+    existing.expertClickCount = Math.max(existing.expertClickCount, Number(record.expertClickCount || 0));
+    if (record.openedAt && (!existing.openedAt || new Date(record.openedAt) < new Date(existing.openedAt))) {
+      existing.openedAt = record.openedAt;
+    }
+    if (record.lastOpenedAt && (!existing.lastOpenedAt || new Date(record.lastOpenedAt) > new Date(existing.lastOpenedAt))) {
+      existing.lastOpenedAt = record.lastOpenedAt;
+    }
+    if (record.expertClickedAt && (!existing.expertClickedAt || new Date(record.expertClickedAt) < new Date(existing.expertClickedAt))) {
+      existing.expertClickedAt = record.expertClickedAt;
+    }
+    if (record.unsubscribedAt) existing.unsubscribedAt = record.unsubscribedAt;
+  }
+  return [...groups.values()];
+}
+
 function filteredRecords() {
   const templateId = templateFilter.value;
-  if (!templateId) return records;
-  return records.filter((record) => record.templateId === templateId);
+  const query = searchInput.value.trim().toLowerCase();
+  return groupRecords(records).filter((record) => {
+    if (templateId && record.templateId !== templateId) return false;
+    if (!query) return true;
+    const haystack = [
+      record.email,
+      record.name,
+      record.company,
+      record.templateName,
+      ...(record.interests || []),
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function metric(label, value, tone = "") {
+  return `<div class="metric ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
 function render() {
   if (loadError) {
     document.querySelector("#statSent").textContent = "0";
     document.querySelector("#statOpened").textContent = "0";
-    document.querySelector("#statClosed").textContent = "0";
+    document.querySelector("#statOpenCount").textContent = "0";
+    document.querySelector("#statExpert").textContent = "0";
     document.querySelector("#trackerCaption").textContent = "Could not load send history.";
-    trackerBody.innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(loadError)}</td></tr>`;
+    trackerList.innerHTML = `<div class="empty-card">${escapeHtml(loadError)}</div>`;
     return;
   }
 
   const rows = filteredRecords();
   const opened = rows.filter((record) => record.openedAt).length;
+  const totalOpens = rows.reduce((sum, record) => sum + Number(record.openCount || 0), 0);
+  const exploreClicks = rows.filter((record) => record.expertClickedAt).length;
+
   document.querySelector("#statSent").textContent = rows.length;
   document.querySelector("#statOpened").textContent = opened;
-  document.querySelector("#statClosed").textContent = rows.length - opened;
+  document.querySelector("#statOpenCount").textContent = totalOpens;
+  document.querySelector("#statExpert").textContent = exploreClicks;
 
   const selected = templateFilter.selectedOptions[0]?.textContent || "All templates";
   document.querySelector("#trackerCaption").textContent = templateFilter.value
-    ? `${selected} · ${opened} opened of ${rows.length} sent`
-    : `${opened} opened of ${rows.length} sent`;
+    ? `${selected} · ${rows.length} deliveries · ${totalOpens} opens · ${exploreClicks} Explore`
+    : `${rows.length} deliveries · ${totalOpens} opens · ${exploreClicks} Explore`;
 
   if (!rows.length) {
-    trackerBody.innerHTML = `<tr><td colspan="7" class="empty">No emails for this template.</td></tr>`;
+    trackerList.innerHTML = `<div class="empty-card">No matching emails.</div>`;
     return;
   }
 
-  trackerBody.innerHTML = rows
+  trackerList.innerHTML = rows
     .map((record) => {
-      const status = record.openedAt
-        ? `<span class="badge opened">Opened</span>`
-        : `<span class="badge unopened">Not opened</span>`;
+      const interests = (record.interests || []).filter(Boolean);
+      const interestHtml = interests.length
+        ? interests.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join("")
+        : `<span class="chip muted">No interest tagged</span>`;
+      const statusTone = record.unsubscribedAt ? "bad" : record.openedAt ? "ok" : "muted";
+      const statusLabel = record.unsubscribedAt
+        ? "Unsubscribed"
+        : record.openedAt
+          ? "Opened"
+          : "Not opened";
+
       return `
-      <tr>
-        <td>${escapeHtml(record.email)}</td>
-        <td>${escapeHtml(record.templateName || "—")}</td>
-        <td>${escapeHtml(record.name || "—")}</td>
-        <td>${escapeHtml(formatWhen(record.sentAt))}</td>
-        <td>${status}</td>
-        <td>${escapeHtml(record.openedAt ? formatWhen(record.openedAt) : "—")}</td>
-        <td>${escapeHtml(record.openCount || 0)}</td>
-      </tr>`;
+      <article class="activity-card">
+        <div class="activity-main">
+          <div class="activity-identity">
+            <h4>${escapeHtml(record.name || "Unknown lead")}</h4>
+            <p class="activity-email">${escapeHtml(record.email)}</p>
+            <p class="activity-meta">${escapeHtml(record.company || "No company")} · ${escapeHtml(record.templateName || "—")}</p>
+          </div>
+          <div class="activity-status">
+            <span class="badge ${statusTone === "ok" ? "opened" : statusTone === "bad" ? "failed" : "unopened"}">${statusLabel}</span>
+            <span class="activity-time">${escapeHtml(formatWhen(record.sentAt))}</span>
+          </div>
+        </div>
+        <div class="interest-row">${interestHtml}</div>
+        <div class="metric-row">
+          ${metric("Opens", record.openCount || 0, record.openCount ? "ok" : "")}
+          ${metric("Last open", record.lastOpenedAt ? formatWhen(record.lastOpenedAt) : "—")}
+          ${metric("Explore", record.expertClickCount || 0, record.expertClickCount ? "ok" : "")}
+          ${metric("Unsubscribed", record.unsubscribedAt ? formatWhen(record.unsubscribedAt) : "No", record.unsubscribedAt ? "bad" : "")}
+        </div>
+      </article>`;
     })
     .join("");
 }
@@ -87,11 +164,21 @@ function fillTemplates(templates) {
 }
 
 async function load() {
-  const [historyRes, templateRes] = await Promise.all([
+  const [historyRes, templateRes, statusRes] = await Promise.all([
     fetch("/api/history"),
     fetch("/api/templates"),
+    fetch("/api/status"),
   ]);
   const templatePayload = await templateRes.json().catch(() => ({ templates: [] }));
+  const statusPayload = await statusRes.json().catch(() => ({}));
+
+  if (statusPayload.tracking?.warning) {
+    trackingWarning.hidden = false;
+    trackingWarning.textContent = statusPayload.tracking.warning;
+  } else {
+    trackingWarning.hidden = true;
+    trackingWarning.textContent = "";
+  }
 
   if (!historyRes.ok) {
     const payload = await historyRes.json().catch(() => ({}));
@@ -110,6 +197,13 @@ async function load() {
 }
 
 templateFilter.addEventListener("change", render);
+searchInput.addEventListener("input", render);
+refreshBtn.addEventListener("click", () => {
+  load().catch((error) => {
+    trackerList.innerHTML = `<div class="empty-card">${escapeHtml(error.message)}</div>`;
+  });
+});
+
 load().catch((error) => {
-  trackerBody.innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(error.message)}</td></tr>`;
+  trackerList.innerHTML = `<div class="empty-card">${escapeHtml(error.message)}</div>`;
 });

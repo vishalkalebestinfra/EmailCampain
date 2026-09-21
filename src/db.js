@@ -83,6 +83,9 @@ async function ensureSchema() {
       opened_at TIMESTAMPTZ,
       open_count INTEGER NOT NULL DEFAULT 0,
       last_opened_at TIMESTAMPTZ,
+      expert_clicked_at TIMESTAMPTZ,
+      expert_click_count INTEGER NOT NULL DEFAULT 0,
+      last_expert_clicked_at TIMESTAMPTZ,
       tracking_token TEXT NOT NULL UNIQUE,
       unsubscribe_token TEXT NOT NULL UNIQUE
     );
@@ -96,6 +99,19 @@ async function ensureSchema() {
   await pool.query(`
     ALTER TABLE sends
     ADD COLUMN IF NOT EXISTS template_name TEXT NOT NULL DEFAULT ''
+  `);
+
+  await pool.query(`
+    ALTER TABLE sends
+    ADD COLUMN IF NOT EXISTS expert_clicked_at TIMESTAMPTZ
+  `);
+  await pool.query(`
+    ALTER TABLE sends
+    ADD COLUMN IF NOT EXISTS expert_click_count INTEGER NOT NULL DEFAULT 0
+  `);
+  await pool.query(`
+    ALTER TABLE sends
+    ADD COLUMN IF NOT EXISTS last_expert_clicked_at TIMESTAMPTZ
   `);
 
   await pool.query(`
@@ -291,6 +307,7 @@ export async function rememberSent(entries) {
 export async function listHistory() {
   const result = await pool.query(
     `SELECT
+       s.delivery_id,
        s.email,
        s.template_id,
        s.template_name,
@@ -300,6 +317,10 @@ export async function listHistory() {
        s.sent_at,
        s.opened_at,
        s.open_count,
+       s.last_opened_at,
+       s.expert_clicked_at,
+       s.expert_click_count,
+       s.last_expert_clicked_at,
        s.message_id,
        c.unsubscribed_at
      FROM sends s
@@ -309,6 +330,7 @@ export async function listHistory() {
   return result.rows.map((row) => {
     const template = getTemplate(row.template_id);
     return {
+      deliveryId: row.delivery_id,
       email: row.email,
       templateId: row.template_id,
       templateName: row.template_name || template?.name || row.template_id,
@@ -318,6 +340,10 @@ export async function listHistory() {
       sentAt: row.sent_at,
       openedAt: row.opened_at,
       openCount: row.open_count,
+      lastOpenedAt: row.last_opened_at,
+      expertClickedAt: row.expert_clicked_at,
+      expertClickCount: row.expert_click_count,
+      lastExpertClickedAt: row.last_expert_clicked_at,
       messageId: row.message_id,
       unsubscribedAt: row.unsubscribed_at,
     };
@@ -325,17 +351,89 @@ export async function listHistory() {
 }
 
 export async function recordOpen(token) {
-  if (!isDbReady() || !token) return;
-  await pool.query(
+  if (!isDbReady() || !token) return false;
+  const result = await pool.query(
     `UPDATE sends AS target
      SET opened_at = COALESCE(target.opened_at, NOW()),
          last_opened_at = NOW(),
          open_count = target.open_count + 1
      WHERE target.delivery_id = (
-       SELECT delivery_id FROM sends WHERE tracking_token = $1
-     )`,
+       SELECT delivery_id FROM sends WHERE tracking_token = $1 LIMIT 1
+     )
+     RETURNING target.id`,
     [token]
   );
+  return result.rowCount > 0;
+}
+
+/** Marks as opened without inflating count when Explore is clicked and the pixel never loaded. */
+export async function ensureOpened(token) {
+  if (!isDbReady() || !token) return false;
+  const result = await pool.query(
+    `UPDATE sends AS target
+     SET opened_at = COALESCE(target.opened_at, NOW()),
+         last_opened_at = COALESCE(target.last_opened_at, NOW()),
+         open_count = CASE WHEN target.open_count = 0 THEN 1 ELSE target.open_count END
+     WHERE target.delivery_id = (
+       SELECT delivery_id FROM sends WHERE tracking_token = $1 LIMIT 1
+     )
+     RETURNING target.id`,
+    [token]
+  );
+  return result.rowCount > 0;
+}
+
+export async function recordExpertInterest(token) {
+  if (!isDbReady() || !token) return null;
+
+  const updated = await pool.query(
+    `UPDATE sends AS target
+     SET expert_clicked_at = COALESCE(target.expert_clicked_at, NOW()),
+         last_expert_clicked_at = NOW(),
+         expert_click_count = target.expert_click_count + 1
+     WHERE target.delivery_id = (
+       SELECT delivery_id FROM sends WHERE tracking_token = $1
+     )
+     RETURNING
+       target.email,
+       target.name,
+       target.company,
+       target.interest,
+       target.template_id,
+       target.template_name,
+       target.expert_click_count,
+       target.expert_clicked_at,
+       target.last_expert_clicked_at`,
+    [token]
+  );
+
+  if (!updated.rows.length) return null;
+
+  const byEmail = new Map();
+  for (const row of updated.rows) {
+    const email = row.email;
+    const existing = byEmail.get(email);
+    if (!existing) {
+      byEmail.set(email, {
+        email: row.email,
+        name: row.name || "",
+        company: row.company || "",
+        interests: row.interest ? [row.interest] : [],
+        templateId: row.template_id,
+        templateName: row.template_name || templateNameFor(row.template_id),
+        expertClickCount: row.expert_click_count,
+        expertClickedAt: row.expert_clicked_at,
+        lastExpertClickedAt: row.last_expert_clicked_at,
+      });
+      continue;
+    }
+    if (row.interest && !existing.interests.includes(row.interest)) {
+      existing.interests.push(row.interest);
+    }
+    existing.expertClickCount = Math.max(existing.expertClickCount, row.expert_click_count);
+  }
+
+  return [...byEmail.values()][0] || null;
 }
 
 export async function findUnsubscribe(token) {

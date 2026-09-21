@@ -23,7 +23,7 @@ function ensureTracking(html, openPixelUrl, unsubscribeUrl) {
     next = next.includes("</body>") ? next.replace("</body>", `${pixel}\n</body>`) : `${next}${pixel}`;
   }
   if (unsubscribeUrl && !next.includes(unsubscribeUrl)) {
-    const link = `<p style="text-align:center;font-size:12px;"><a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe</a></p>`;
+    const link = `<p style="text-align:center;margin:20px 0;"><a href="${escapeHtml(unsubscribeUrl)}" style="display:inline-block;padding:10px 18px;background:#f3f4f6;color:#374151;text-decoration:none;border-radius:999px;font-size:13px;font-weight:700;">Unsubscribe</a></p>`;
     next = next.includes("</body>") ? next.replace("</body>", `${link}\n</body>`) : `${next}${link}`;
   }
   return next;
@@ -96,7 +96,7 @@ function mergeContent(template, lead) {
   return { subject, text, vars };
 }
 
-export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl }) {
+export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl, exploreUrl }) {
   const built = template.mode === "interest-brochures"
     ? summitContent(lead)
     : mergeContent(template, lead);
@@ -106,11 +106,13 @@ export async function buildEmail({ template, lead, openPixelUrl, unsubscribeUrl 
     ...built.vars,
     OPEN_PIXEL_URL: openPixelUrl || "",
     UNSUBSCRIBE_URL: unsubscribeUrl || "",
+    EXPLORE_URL: exploreUrl || "https://bestinfra.org/",
   }), openPixelUrl, unsubscribeUrl);
 
   const text = [
     ...built.text,
     "",
+    exploreUrl ? `Explore: ${exploreUrl}` : "",
     unsubscribeUrl ? `Unsubscribe: ${unsubscribeUrl}` : "",
   ].filter((line, index, all) => line !== "" || all[index - 1] !== "").join("\n");
 

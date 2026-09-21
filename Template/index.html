@@ -485,6 +485,7 @@
                                 style="margin: 12px 0 0 0; font-family: 'Manrope', Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #364153; font-weight: normal;">
                                 Based on your {{INTEREST_WORD}} in <strong style="font-weight: bold; color: #163B7C;">{{LEAD_INTEREST}}</strong>{{LEAD_ORG_CLAUSE}}, we have attached relevant {{BROCHURE_WORD}} with this email.
                             </p>
+                            <img src="{{OPEN_PIXEL_URL}}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;outline:none;max-height:1px;" />
                         </td>
                     </tr>
 
@@ -808,6 +809,24 @@
                                         <!--<![endif]-->
                                     </td>
                                 </tr>
+                                <tr>
+                                    <td height="12" style="height: 12px; font-size: 0; line-height: 0;">&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td align="center" bgcolor="#55B56C"
+                                        style="border-radius: 28px; background-color: #55B56C;">
+                                        <!--[if mso]>
+                    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{EXPLORE_URL}}" style="height:48px;v-text-anchor:middle;width:320px;" arcsize="50%" stroke="f" fillcolor="#55B56C">
+                      <w:anchorlock/>
+                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">Explore &rarr;</center>
+                    </v:roundrect>
+                    <![endif]-->
+                                        <!--[if !mso]><!-->
+                                        <a class="cta-link" href="{{EXPLORE_URL}}" target="_blank"
+                                            style="display: inline-block; padding: 14px 28px; font-size: 15px; line-height: 20px; font-weight: bold; color: #ffffff; text-decoration: none; font-family: 'Manrope', Arial, Helvetica, sans-serif; border-radius: 14px; background-color: #55B56C;"><strong style="font-weight: bold; color: #ffffff;">Explore &rarr;</strong></a>
+                                        <!--<![endif]-->
+                                    </td>
+                                </tr>
                             </table>
                         </td>
                     </tr>
@@ -965,11 +984,17 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td align="center" style="padding-bottom: 12px;">
-                                        <p class="footer-text"
-                                            style="margin: 0; font-family: 'Manrope', Arial, Helvetica, sans-serif; font-size: 12px; line-height: 18px; text-align: center;">
-                                            <a href="{{UNSUBSCRIBE_URL}}" style="color: #6B7280; text-decoration: underline;">Unsubscribe</a>
-                                        </p>
+                                    <td align="center" style="padding-bottom: 16px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
+                                            <tr>
+                                                <td align="center" bgcolor="#F3F4F6" style="border-radius: 999px; background-color: #F3F4F6;">
+                                                    <a href="{{UNSUBSCRIBE_URL}}"
+                                                        style="display: inline-block; padding: 10px 18px; font-family: 'Manrope', Arial, Helvetica, sans-serif; font-size: 13px; line-height: 18px; font-weight: bold; color: #374151; text-decoration: none; border-radius: 999px; background-color: #F3F4F6;">
+                                                        <strong style="font-weight: bold; color: #374151;">Unsubscribe</strong>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </td>
                                 </tr>
                                 <tr>
@@ -996,7 +1021,6 @@
             </td>
         </tr>
     </table>
-    <img src="{{OPEN_PIXEL_URL}}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;outline:none;" />
 </body>
 
 </html>
